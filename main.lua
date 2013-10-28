@@ -17,6 +17,18 @@ playerPrev={}
 blocksPrev={1,1}
 pLeft,pRight=false,false
 jump = true
+mouseX,mouseY=0,0
+mouseB = 0
+prevPos = {0,0}
+focusYpos = h
+changeFocusYpos = true
+
+map = false
+
+local gamera = require 'gamera'
+local cam = gamera.new(0,0,1024,768)
+cam:setPosition(0,0)
+cam:setScale(1)
 
 function love.load()
 	for x=1,w,1 do
@@ -34,44 +46,49 @@ function love.load()
 end
 
 function love.draw()
-	if playerPrev[1]~=nil then
-		if player[1]~=playerPrev[1] or player[2]~=playerPrev[2] then
-			t[playerPrev[1]][playerPrev[2]]=blocksPrev[1]
-			t[playerPrev[1]][playerPrev[2]-1]=blocksPrev[2]
-			blocksPrev[1]=t[player[1]][player[2]]
-			blocksPrev[2]=t[player[1]][player[2]-1]
-			t[player[1]][player[2]]=8
-			t[player[1]][player[2]-1]=8
-		end
-	end
-	for x=1,w,1 do
-		for y=1,h,1 do
-			if t[x][y]>0 then
-				if t[x][y]==3 then
-					love.graphics.setColor(0,255,0)
-				elseif t[x][y]==2 then
-					love.graphics.setColor(255,0,0)
-				elseif t[x][y]==1 then
-					love.graphics.setColor(0,0,255)
-				elseif t[x][y]==4 then
-				 	love.graphics.setColor(255,255,0)
-				elseif t[x][y]==8 then
-					love.graphics.setColor(255,255,255) --player
-				end
-				love.graphics.rectangle("fill",(x-1)*s,(y-1)*s,s,s)
+	cam:draw(function()
+		if playerPrev[1]~=nil then
+			if player[1]~=playerPrev[1] or player[2]~=playerPrev[2] then
+				t[playerPrev[1]][playerPrev[2]]=blocksPrev[1]
+				t[playerPrev[1]][playerPrev[2]-1]=blocksPrev[2]
+				blocksPrev[1]=t[player[1]][player[2]]
+				blocksPrev[2]=t[player[1]][player[2]-1]
+				t[player[1]][player[2]]=8
+				t[player[1]][player[2]-1]=8
 			end
 		end
-	end
+		for x=1,w,1 do
+			for y=1,h,1 do
+				if t[x][y]>0 then
+					if t[x][y]==3 then
+						love.graphics.setColor(0,255,0)
+					elseif t[x][y]==2 then
+						love.graphics.setColor(255,0,0)
+					elseif t[x][y]==1 then
+						love.graphics.setColor(0,0,255)
+					elseif t[x][y]==4 then
+					 	love.graphics.setColor(255,255,0)
+					elseif t[x][y]==8 then
+						love.graphics.setColor(255,255,255) --player
+					end
+					love.graphics.rectangle("fill",(x-1)*s,(y-1)*s,s,s)
+				end
+			end
+		end
+		if player[1]~=nil then
+			playerPrev[1]=player[1]
+			playerPrev[2]=player[2]
+		end
+	end)
 	love.graphics.setColor(255,255,255)
 	love.graphics.print(c,0,0)
 	love.graphics.print(time,0,15)
-	if player[1]~=nil then
-		playerPrev[1]=player[1]
-		playerPrev[2]=player[2]
-	end
+	love.graphics.rectangle("fill",mouseX,mouseY,s,s)
 end
 
 function love.update(dt)
+	mouseX = love.mouse.getX()
+	mouseY = love.mouse.getY()
 	playerMov()
 	for i in pairs(nProcs) do
 		table.remove(nProcs,i)
@@ -191,10 +208,22 @@ function love.update(dt)
 			completed()
 		end
 	else
+		local xposition,yposition = math.ceil((player[1]-1)*s),math.ceil((player[2]-1)*s)
+		if yposition>=focusYpos then
+			cam:setPosition(xposition,yposition)
+			changeFocusYpos=true
+		end
 		if t[player[1]][player[2]+1]==1 then
 			player[2]=player[2]+1
 			jump=false
 		else jump=true end
+		if mouseB ~= 0 then
+			local xPos,yPos = cam:toWorld(mouseX,mouseY)
+			if xPos>2 and yPos>2 then
+				if t[math.ceil((xPos-1)/s)][math.ceil((yPos-1)/s)]~=8 then t[math.ceil((xPos-1)/s)][math.ceil((yPos-1)/s)]=1 end
+			end
+		end
+		prevPos = {xposition,yposition}
 	end
 end
 
@@ -234,6 +263,12 @@ function completed()
 			end
 		end
 	end
+	cam:setScale(2)
+	map=false
+	local a,b = cam:toWorld(mouseX,mouseY)
+	prevPos = {a,b}
+	local xposition,yposition = math.ceil((player[1]-1)*s),math.ceil((player[2]-1)*s)
+	cam:setPosition(xposition,yposition)
 end
 
 function startUp(un,deux)
@@ -259,12 +294,25 @@ function love.keypressed(key, unicode)
 	if key=="up" then
 		if t[player[1]][player[2]-2]==1 then
 			if jump then
+				if changeFocusYpos then
+					focusYpos = (player[2]-1)*s
+					changeFocusYpos=false
+				end
 				player[2]=player[2]-2
 				jump=false
 				if t[player[1]][player[2]-3]==1 then
 					player[2]=player[2]-1
 				end
 			end
+		end
+	end
+	if key=="m" then
+		if map then
+			cam:setScale(2)
+			map=false
+		else
+			cam:setScale(1)
+			map=true
 		end
 	end
 end
@@ -289,5 +337,19 @@ function playerMov()
 				end
 			end
 		end
+	end
+end
+
+function love.mousepressed(x,y,button)
+	if finished then
+		mouseX = x
+		mouseY = y
+		mouseB = button
+	end
+end
+
+function love.mousereleased(x, y, button)
+	if finished then
+		mouseB = 0
 	end
 end
