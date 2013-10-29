@@ -1,4 +1,5 @@
 t={} --set up in love.load()
+ta={}
 revive=3
 c=0 --count
 p=0 --processes
@@ -22,6 +23,9 @@ mouseB = 0
 prevPos = {0,0}
 focusYpos = h
 changeFocusYpos = true
+aimCamPosition = {0,0}
+zoom=4
+gravity=true
 
 map = false
 
@@ -33,8 +37,10 @@ cam:setScale(1)
 function love.load()
 	for x=1,w,1 do
 		table.insert(t,{})
+		table.insert(ta,{})
 		for y=1,h,1 do
 			table.insert(t[x],0)
+			table.insert(ta[x],0)
 		end
 	end
 	for i=1,reps,1 do
@@ -59,6 +65,26 @@ function love.draw()
 		end
 		for x=1,w,1 do
 			for y=1,h,1 do
+				ta[x][y]=t[x][y]
+			end
+		end
+		for x=1,w,1 do
+			for y=1,h,1 do
+				if finished then
+					if gravity then
+						if t[x][y]==0 then
+							if t[x][y+1]==1 then
+								ta[x][y]=1
+								ta[x][y+1]=0
+							end
+						end
+					end
+				end
+			end
+		end
+		for x=1,w,1 do
+			for y=1,h,1 do
+				if gravity then t[x][y]=ta[x][y] end
 				if t[x][y]>0 then
 					if t[x][y]==3 then
 						love.graphics.setColor(0,255,0)
@@ -99,119 +125,31 @@ function love.update(dt)
 		if t[x][y]==3 then t[x][y]=2 end
 	end
 	if not finished then
-		time=time+dt
-		for i in pairs(procs) do
-			local x=procs[i][1]
-			local y=procs[i][2]
-			if t[x][y]>1 and t[x][y]<4 then
-				local r = math.random(1,4)
-				if r==1 then
-					if y<h then
-						if t[x][y+1]>0 then
-							t[x][y]=q
-							p=p-1
-						else 
-							t[x][y+1]=3
-							table.insert(procs,{x,y+1})
-							table.insert(nProcs,{x,y+1})
-							c=c+1
-							p=p+1
-						end
-					else
-						t[x][y]=q
-						p=p-1
-					end
-				elseif r==2 then
-					if y>1 then
-						if t[x][y-1]>0 then
-							t[x][y]=q
-							p=p-1
-						else 
-							t[x][y-1]=3
-							table.insert(procs,{x,y-1})
-							table.insert(nProcs,{x,y-1})
-							c=c+1
-							p=p+1
-						end
-					else
-						t[x][y]=q
-						p=p-1
-					end
-				elseif r==3 then
-					if x<w then
-						if t[x+1][y]>0 then
-							t[x][y]=q
-							p=p-1
-						else 
-							t[x+1][y]=3
-							table.insert(procs,{x+1,y})
-							table.insert(nProcs,{x+1,y})
-							c=c+1
-							p=p+1
-						end
-					else
-						t[x][y]=q
-						p=p-1
-					end
-				else
-					if x>1 then
-						if t[x-1][y]>0 then
-							t[x][y]=q
-							p=p-1
-						else 
-							t[x-1][y]=3
-							table.insert(procs,{x-1,y})
-							table.insert(nProcs,{x-1,y})
-							c=c+1
-							p=p+1
-						end
-					else
-						t[x][y]=q
-						p=p-1
-					end
-				end
-			end
-		end
-		for i in pairs(procs) do
-			if t[procs[i][1]][procs[i][2]]~=2 and t[procs[i][1]][procs[i][2]]~=3 then
-				table.remove(procs,i)
-			end
-		end
-		-- for i in pairs(procs) do
-		-- 	print(procs[i][1],procs[i][2])
-		-- end
-		--print("STOP with "..#procs.." procs")
-		--loop until c is whatever it needs to be
-		if #procs==0 then
-			if revive>0 then
-				for i in pairs(nProcs) do
-					local x = nProcs[i][1]
-					local y = nProcs[i][2]
-					t[x][y]=3
-					p=p+1
-				end
-				revive=revive-1
-			else
-				for i=1,reps,1 do
-					local un = math.random(1,w-1)
-					local deux = math.random(1,h-1)
-					startUp(un,deux)
-					startUp(w-un,h-deux)
-				end
-				revive=3 --it's got itself in a loop (it can only revive impossible processes)
-			end
-		else
-			revive=3
-		end
-		if c>total then
-			finished=true
-			completed()
-		end
+		worldGen(dt)
 	else
 		local xposition,yposition = math.ceil((player[1]-1)*s),math.ceil((player[2]-1)*s)
-		if yposition>=focusYpos then
-			cam:setPosition(xposition,yposition)
+		if yposition>=focusYpos or (focusYpos-yposition)>(3*s) then
+			aimCamPosition = {xposition,yposition}
 			changeFocusYpos=true
+		end
+		local camX,camY=cam:getPosition()
+		if camX~=aimCamPosition[1] then
+			if camX>aimCamPosition[1] then
+				camX = camX-s
+				cam:setPosition(camX,camY)
+			else
+				camX = camX+s
+				cam:setPosition(camX,camY)
+			end
+		end
+		if camY~=aimCamPosition[2] then
+			if camY>aimCamPosition[2] then
+				camY = camY-s
+				cam:setPosition(camX,camY)
+			else
+				camY = camY+s
+				cam:setPosition(camX,camY)
+			end
 		end
 		if t[player[1]][player[2]+1]==1 then
 			player[2]=player[2]+1
@@ -219,8 +157,10 @@ function love.update(dt)
 		else jump=true end
 		if mouseB ~= 0 then
 			local xPos,yPos = cam:toWorld(mouseX,mouseY)
+			local a=1
+			if mouseB=="l" then a=1 else a=4 end
 			if xPos>2 and yPos>2 then
-				if t[math.ceil((xPos-1)/s)][math.ceil((yPos-1)/s)]~=8 then t[math.ceil((xPos-1)/s)][math.ceil((yPos-1)/s)]=1 end
+				if t[math.ceil((xPos-1)/s)][math.ceil((yPos-1)/s)]~=8 then t[math.ceil((xPos-1)/s)][math.ceil((yPos-1)/s)]=a end
 			end
 		end
 		prevPos = {xposition,yposition}
@@ -263,7 +203,7 @@ function completed()
 			end
 		end
 	end
-	cam:setScale(2)
+	cam:setScale(zoom)
 	map=false
 	local a,b = cam:toWorld(mouseX,mouseY)
 	prevPos = {a,b}
@@ -308,7 +248,7 @@ function love.keypressed(key, unicode)
 	end
 	if key=="m" then
 		if map then
-			cam:setScale(2)
+			cam:setScale(zoom)
 			map=false
 		else
 			cam:setScale(1)
@@ -326,13 +266,13 @@ function playerMov()
 	if finished then
 		if pLeft then
 			if player[1]>1 then
-				if t[player[1]-1][player[2]]==1 then
+				if t[player[1]-1][player[2]]==1 and t[player[1]-1][player[2]-1]==1 then
 					player[1]=player[1]-1
 				end
 			end
 		elseif pRight then
 			if player[1]<w then
-				if t[player[1]+1][player[2]]==1 then
+				if t[player[1]+1][player[2]]==1 and t[player[1]+1][player[2]-1]==1 then
 					player[1]=player[1]+1
 				end
 			end
@@ -351,5 +291,116 @@ end
 function love.mousereleased(x, y, button)
 	if finished then
 		mouseB = 0
+	end
+end
+
+function worldGen(dt)
+	time=time+dt
+	for i in pairs(procs) do
+		local x=procs[i][1]
+		local y=procs[i][2]
+		if t[x][y]>1 and t[x][y]<4 then
+			local r = math.random(1,4)
+			if r==1 then
+				if y<h then
+					if t[x][y+1]>0 then
+						t[x][y]=q
+						p=p-1
+					else 
+						t[x][y+1]=3
+						table.insert(procs,{x,y+1})
+						table.insert(nProcs,{x,y+1})
+						c=c+1
+						p=p+1
+					end
+				else
+					t[x][y]=q
+					p=p-1
+				end
+			elseif r==2 then
+				if y>1 then
+					if t[x][y-1]>0 then
+						t[x][y]=q
+						p=p-1
+					else 
+						t[x][y-1]=3
+						table.insert(procs,{x,y-1})
+						table.insert(nProcs,{x,y-1})
+						c=c+1
+						p=p+1
+					end
+				else
+					t[x][y]=q
+					p=p-1
+				end
+			elseif r==3 then
+				if x<w then
+					if t[x+1][y]>0 then
+						t[x][y]=q
+						p=p-1
+					else 
+						t[x+1][y]=3
+						table.insert(procs,{x+1,y})
+						table.insert(nProcs,{x+1,y})
+						c=c+1
+						p=p+1
+					end
+				else
+					t[x][y]=q
+					p=p-1
+				end
+			else
+				if x>1 then
+					if t[x-1][y]>0 then
+						t[x][y]=q
+						p=p-1
+					else 
+						t[x-1][y]=3
+						table.insert(procs,{x-1,y})
+						table.insert(nProcs,{x-1,y})
+						c=c+1
+						p=p+1
+					end
+				else
+					t[x][y]=q
+					p=p-1
+				end
+			end
+		end
+	end
+	for i in pairs(procs) do
+		if t[procs[i][1]][procs[i][2]]~=2 and t[procs[i][1]][procs[i][2]]~=3 then
+			table.remove(procs,i)
+		end
+	end
+	-- for i in pairs(procs) do
+	-- 	print(procs[i][1],procs[i][2])
+	-- end
+	--print("STOP with "..#procs.." procs")
+	--loop until c is whatever it needs to be
+	if #procs==0 then
+		if revive>0 then
+			for i in pairs(nProcs) do
+				local x = nProcs[i][1]
+				local y = nProcs[i][2]
+				t[x][y]=3
+				p=p+1
+			end
+			revive=revive-1
+		else
+			for i=1,reps,1 do
+				local un = math.random(1,w-1)
+				local deux = math.random(1,h-1)
+				startUp(un,deux)
+				startUp(w-un,h-deux)
+			end
+			revive=3 --it's got itself in a loop (it can only revive impossible processes)
+		end
+	else
+		revive=3
+	end
+	if c>total then
+		finished=true
+		completed()
 	end
 end
